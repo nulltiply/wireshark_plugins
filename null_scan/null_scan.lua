@@ -1,7 +1,9 @@
 -- needs to be outside function called from menu
--- grabs the tcp.stream and tcp flags fields
+-- grabs the tcp.stream, tcp flags, srcport and dstport fields
 local tcp_stream_info = Field.new("tcp.stream");
 local tcp_flags_field = Field.new("tcp.flags")
+local tcp_srcport_field = Field.new("tcp.srcport")
+local tcp_dstport_field = Field.new("tcp.dstport")
 
 -- Scans to test against - Individual TCP stream length vary from 1 to 2 in each of these scans
 -- Null scan (-sN) - <None> - returns flag value of 0/0x000 
@@ -12,13 +14,15 @@ local tcp_flags_field = Field.new("tcp.flags")
 local tcp_flags = { [0] = "NONE", [1] = "FIN", [2] = "SYN", [4] = "RST", [8] = "PSH", [16] = "ACK", [17] = "FIN-ACK", [18] = "SYN-ACK",
 [20] = "RST-ACK", [24] = "PSH-ACK", [25] = "FIN-PSH-ACK", [32] = "URG", [41] = "FIN-PSH-URG"}
 
-function tcp_stream()
+-- method will be called from menu context Tools-->Null-tools-->Port-Scans
+function port_scans()
 
-    local tw = TextWindow.new("TCP Stream Index");
+    local tw = TextWindow.new("Possible Port Scans");
     local tap = Listener.new('tcp');
     local streams_unsorted = {}
     local streams_sorted = { }
     local iterator = 1
+
     local function remove()
 		-- removes the listener as to not run indefinitely
 		tap:remove();
@@ -37,8 +41,8 @@ function tcp_stream()
 
             -- extract source, destination IP from packets
             local src = tostring(pinfo.src) or 0
-            local dst = tostring(pinfo.dst)or 0
-            -- extract tcp flags in hex
+            local dst = tostring(pinfo.dst) or 0
+
             local flags = tcp_flags_field()
             if flags then
                 local set_tcp_flags = flags.value
@@ -47,7 +51,7 @@ function tcp_stream()
                     set_tcp_flags = tcp_flags[flags.value]
                 end
 
-                packet = {TCP_INDEX=tonumber(tostring(tcp_stream_index)), FRAME_NO=pinfo.number, FLAGS=set_tcp_flags}
+                packet = {TCP_INDEX=tonumber(tostring(tcp_stream_index)), FRAME_NO=pinfo.number, FLAGS=set_tcp_flags, srcPort=tostring(tcp_srcport_field()), dstPort=tostring(tcp_dstport_field())}
                 streams_unsorted[iterator] = packet
                 
                 -- lua arrays start on 1
@@ -101,11 +105,12 @@ function tcp_stream()
                         possible_scan = 'Null Scan'
                     end
 
-                    tw:append('Possible Scan: ' .. possible_scan .." TCP Stream Index: " .. i .. " Length: " .. #streams_sorted[i] .. "\r\n")
+                    tw:append('Possible Scan: ' .. possible_scan .." TCP Stream Index: " .. i .. " Length: " .. #streams_sorted[i] .. "\r\n\r\n")
                     
                     for j, item in pairs(streams_sorted[i]) do
-                        tw:append("\t" .. "TCP Index: " .. item.TCP_INDEX .. " Frame No: " .. item.FRAME_NO .. " Flags: " .. item.FLAGS .. '\r\n')
+                        tw:append("\t" .. " Frame No: " .. item.FRAME_NO .. " SRC/DST: " .. item.srcPort .. " => " .. item.dstPort .. " Flags: " .. item.FLAGS .. '\r\n')
                     end
+                    tw:append('\r\n')
                 end
             end
 
@@ -124,5 +129,53 @@ function tcp_stream()
     retap_packets()
 end
 
--- assigns function and menu option as Tools-->Null-tools-->TCP-Stream
-register_menu("Null-Tools/TCP-Stream", tcp_stream, MENU_TOOLS_UNSORTED)
+-- method will be called from menu context Tools-->Null-tools-->SQL-Injections
+function sql_injections()
+
+    local tw = TextWindow.new("Possible SQL Injections");
+    local tap = Listener.new('tcp');
+
+    local function remove()
+		-- removes the listener as to not run indefinitely
+		tap:remove();
+    end
+    
+    --  call remove() function when closing window
+    tw:set_atclose(remove)
+    
+    -- will be run on every packet 
+    -- last_index = 0
+
+    function tap.packet(pinfo,tvb)
+
+            -- extract source, destination IP from packets
+            -- local src = tostring(pinfo.src) or 0
+            -- local dst = tostring(pinfo.dst) or 0
+
+            -- LUA string pattern functions
+            -- string.match("examples", 'examples')
+            -- string.find('example', 'ex')
+        
+        -- this function will be called once every few seconds to update the window
+		function tap.draw(t)
+            tw:clear()
+            tw:append('Placeholder')
+        end
+        
+    end
+    
+    -- this function will be called whenever a reset is needed
+	-- for instance when reloading the capture file
+    function tap.reset()
+		tw:clear()
+	end
+
+    -- ensure that all existing packets are processed.
+    retap_packets()
+    
+end
+
+
+-- assigns function and menu option as Tools-->Null-tools-->Port-Scans
+register_menu("Null-Tools/Port-Scans", port_scans, MENU_TOOLS_UNSORTED)
+register_menu("Null-Tools/SQL-Injections", sql_injections, MENU_TOOLS_UNSORTED)
