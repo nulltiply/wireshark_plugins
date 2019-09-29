@@ -3,7 +3,7 @@
 local tcp_stream_info = Field.new("tcp.stream");
 local tcp_flags_field = Field.new("tcp.flags")
 
--- Scans to test against
+-- Scans to test against - Individual TCP stream length vary from 1 to 2 in each of these scans
 -- Null scan (-sN) - <None> - returns flag value of 0/0x000 
 -- FIN scan (-sF) - FIN - returns flag value of 1/0x01
 -- Xmas scan (-sX) - FIN-PSH-URG - returns flag value of 41/0x029 
@@ -31,7 +31,7 @@ function tcp_stream()
     -- last_index = 0
 
     function tap.packet(pinfo,tvb)
-        local tcp_stream_index = tcp_stream_info();
+        tcp_stream_index = tcp_stream_info();
         -- null/nil check
         if (tcp_stream_index ~= nil) then
 
@@ -41,20 +41,17 @@ function tcp_stream()
             -- extract tcp flags in hex
             local flags = tcp_flags_field()
             if flags then
-                local flags_formatted = string.format("tcp.flags = %#x", flags.value)
-                local packet_item = "TCP Index: " .. tostring(tcp_stream_index) .. " Frame No: " .. pinfo.number 
                 local set_tcp_flags = flags.value
 
                 if (flags.value ~= nil) then
                     set_tcp_flags = tcp_flags[flags.value]
                 end
-                -- lua arrays start on 1
-                packet_item = packet_item .. " Flag: " .. set_tcp_flags .. "\r\n"
-                streams_unsorted[iterator] = packet_item
-                iterator = iterator + 1
-                -- tw:append(packet_item)
 
-                -- tw:append("Frame no: " .. pinfo.number .. " Index: " .. tostring(tcp_stream_index) .. " src: " .. src .. " dst: " .. dst .. " flags: " .. tcp_flag .. "\r\n");
+                packet = {TCP_INDEX=tonumber(tostring(tcp_stream_index)), FRAME_NO=pinfo.number, FLAGS=set_tcp_flags}
+                streams_unsorted[iterator] = packet
+                
+                -- lua arrays start on 1
+                iterator = iterator + 1
             end
             
         end	
@@ -67,38 +64,39 @@ function tcp_stream()
             local tcp_index_max = 0
             for i, item in pairs(streams_unsorted) do
                 -- i is iterator and item is packet_item
-                index_num = string.match(item, "%d+")
-                index_num = tonumber(index_num)
-                if (index_num > tcp_index_max) then
-                    tcp_index_max = index_num
+
+                if (item.TCP_INDEX > tcp_index_max) then
+                    tcp_index_max = item.TCP_INDEX
                 end
                 
             end
             
             -- fills a 2D array with sorted streams and appends them to the text window
             for i=0, tcp_index_max do  
-                tw:append("TCP Stream Index: " .. i .. "\r\n")
                 nested_iterator = 1
                 streams_sorted[i] = {}        
 
-                tcp_stream_length = 0
                 for j, item in pairs(streams_unsorted) do
-                    index_num = string.match(item, "%d+")
-                    index_num = tonumber(index_num)
-                    
-                    if (i == index_num) then
+
+                    if (i == item.TCP_INDEX) then
                         streams_sorted[i][nested_iterator] = item
                         nested_iterator = nested_iterator + 1
-                        tw:append("\t" .. item)
-                        tcp_stream_length = tcp_stream_length + 1
                     end
                 end
-                tw:append("TCP Stream Length: " .. tcp_stream_length .. "\r\n") 
             end
-            -- last iteration to check for possible scans?
-            -- get length here instead table.getn(array) 
 
-		end
+            -- #streams_sorted/#streams_sorted[1] returns length of the array
+            --  runs through the sorted streams and prints them out
+            for i=0, #streams_sorted do
+                tw:append("TCP Stream Index: " .. i .. " Length: " .. #streams_sorted[i] .. "\r\n")
+                for j, item in pairs(streams_sorted[i]) do
+                    tw:append("\t" .. "TCP Index: " .. item.TCP_INDEX .. " Frame No: " .. item.FRAME_NO .. " Flags: " .. item.FLAGS .. '\r\n')
+                end 
+            end
+
+
+        end
+        
     end
     
     -- this function will be called whenever a reset is needed
