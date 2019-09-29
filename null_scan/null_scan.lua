@@ -88,10 +88,25 @@ function tcp_stream()
             -- #streams_sorted/#streams_sorted[1] returns length of the array
             --  runs through the sorted streams and prints them out
             for i=0, #streams_sorted do
-                tw:append("TCP Stream Index: " .. i .. " Length: " .. #streams_sorted[i] .. "\r\n")
-                for j, item in pairs(streams_sorted[i]) do
-                    tw:append("\t" .. "TCP Index: " .. item.TCP_INDEX .. " Frame No: " .. item.FRAME_NO .. " Flags: " .. item.FLAGS .. '\r\n')
-                end 
+                if (#streams_sorted[i] <= 2) then
+                    possible_scan = ''
+                    -- arrays start on 1 
+                    if (streams_sorted[i][1].FLAGS == "FIN-PSH-URG") then
+                        possible_scan = 'Xmas Scan'
+                    end
+                    if (streams_sorted[i][1].FLAGS == "FIN") then
+                        possible_scan = 'FIN Scan'
+                    end
+                    if (streams_sorted[i][1].FLAGS == "NONE") then
+                        possible_scan = 'Null Scan'
+                    end
+
+                    tw:append('Possible Scan: ' .. possible_scan .." TCP Stream Index: " .. i .. " Length: " .. #streams_sorted[i] .. "\r\n")
+                    
+                    for j, item in pairs(streams_sorted[i]) do
+                        tw:append("\t" .. "TCP Index: " .. item.TCP_INDEX .. " Frame No: " .. item.FRAME_NO .. " Flags: " .. item.FLAGS .. '\r\n')
+                    end
+                end
             end
 
 
